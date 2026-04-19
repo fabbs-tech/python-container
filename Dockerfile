@@ -22,13 +22,18 @@ ARG PYTHON_VERSION=3.12
 # deadsnakes PPA gives us 3.12, 3.13, … on Ubuntu 22.04 without
 # waiting for Ubuntu's release cadence.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        software-properties-common ca-certificates \
+        software-properties-common ca-certificates gnupg \
     && add-apt-repository -y ppa:deadsnakes/ppa \
     && apt-get update && apt-get install -y --no-install-recommends \
         python${PYTHON_VERSION} python${PYTHON_VERSION}-dev python${PYTHON_VERSION}-venv \
         git curl \
         libatomic1 \
     && rm -rf /var/lib/apt/lists/*
+
+# gnupg above: vanilla ubuntu:22.04 ships without gpg-agent, so
+# `add-apt-repository ppa:deadsnakes/ppa` fails when trying to import
+# the PPA key. jax4090-container gets gpg for free via the
+# nvidia/cuda base image, but here we install it explicitly.
 
 # Make the chosen Python the default `python` and `python3`.
 RUN update-alternatives --install /usr/bin/python  python  /usr/bin/python${PYTHON_VERSION} 1 \
