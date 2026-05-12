@@ -35,6 +35,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # the PPA key. jax4090-container gets gpg for free via the
 # nvidia/cuda base image, but here we install it explicitly.
 
+# Ubuntu 22.04's apt set can transitively pull python3-pyparsing 2.4.7
+# for the system Python 3.10. A consumer requirements.txt that needs
+# pyparsing>=3 (matplotlib does) triggers pip's uninstall-then-reinstall
+# path on the apt copy and trips a Permission denied on root-owned
+# /usr/lib/python3/dist-packages/. Purge preemptively; the dpkg guard
+# makes this a no-op if our narrowed apt set (--no-install-recommends
+# above) doesn't actually pull it in. Same finding as the sibling
+# jax4090-container image's 2026-05-12 fix.
+RUN if dpkg -s python3-pyparsing > /dev/null 2>&1; then \
+        apt-get purge -y --auto-remove python3-pyparsing; \
+    fi
+
 # Make the chosen Python the default `python` and `python3`.
 RUN update-alternatives --install /usr/bin/python  python  /usr/bin/python${PYTHON_VERSION} 1 \
  && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python${PYTHON_VERSION} 1
@@ -68,13 +80,20 @@ RUN python -m pip install --upgrade pip \
 # The USER directive is deliberately NOT set: the image still defaults
 # to root so ad-hoc `docker run` keeps working, and the dev user is
 # selected explicitly by consumers (devcontainer.json `remoteUser`,
-# CI `docker run --user`). /usr/local/{lib/pythonX.Y,bin} are chowned
-# so the dev user can `pip install` project deps at runtime.
+# CI `docker run --user`). /usr/local/{lib/pythonX.Y,bin,share} are
+# chowned so the dev user can `pip install` project deps at runtime.
+# share/ matters because pip-installed packages drop manpages, shell
+# completions, and locale data under /usr/local/share/; a write
+# rejection there (e.g. fonttools' ttx.1, pulled in transitively by
+# matplotlib) aborts the whole pip transaction even though the Python
+# files themselves would install fine. Same finding as the sibling
+# jax4090-container image's 2026-05-12 fix; cross-referenced in
+# tooling/dev_notes/log/jax_container_image_fixes_20260512.md.
 ARG DEV_USER=dev
 ARG DEV_UID=1000
 ARG DEV_GID=1000
 RUN groupadd --gid ${DEV_GID} ${DEV_USER} \
  && useradd --uid ${DEV_UID} --gid ${DEV_GID} --create-home --shell /bin/bash ${DEV_USER} \
- && chown -R ${DEV_USER}:${DEV_USER} /usr/local/lib/python${PYTHON_VERSION} /usr/local/bin
+ && chown -R ${DEV_USER}:${DEV_USER} /usr/local/lib/python${PYTHON_VERSION} /usr/local/bin /usr/local/share
 
 WORKDIR /workspace
