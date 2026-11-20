@@ -28,7 +28,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python${PYTHON_VERSION} python${PYTHON_VERSION}-dev python${PYTHON_VERSION}-venv \
         git curl \
         libatomic1 \
+        gcc libc6-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# gcc and libc6-dev above: the CI of firmware_tooling builds and runs the C
+# host tests of its blocks. gcc only recommends libc6-dev, and the image
+# installs no recommended package, so libc6-dev is named.
 
 # gnupg above: vanilla ubuntu:22.04 ships without gpg-agent, so
 # `add-apt-repository ppa:deadsnakes/ppa` fails when trying to import
